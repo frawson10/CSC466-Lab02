@@ -7,7 +7,7 @@ def main():
     goodsFile = "../bakery-datasets/goods.csv"
     goods = parseGoods(goodsFile)
     baskets = parseBaskets(basketsFile)
-    minSup = 50
+    minSup = 40
     skyline = apriori(baskets, goods, minSup)
 
 def apriori(basketsDict, goodsDict, minSup):
@@ -74,11 +74,42 @@ def candidateGen(frequentItemsets, k):
                 if(i+1 != len(prevFreqItemsets)):
                     if(i != j):
                         nextLevel = list(itertools.combinations(np.append(prevFreqItemsets[i], prevFreqItemsets[j]), k+1))
-                        nextLevel = prune(prevFreqItemsets, nextLevel)
-        return []
+                        # print(nextLevel)
+                        valid = prune(prevFreqItemsets, nextLevel, k)
+                        if len(valid) > 0:
+                            candidatesArr.append(valid)
+        return filterDuplicates(candidatesArr)
 
-def prune(prevFreqs, potentialCombs):
-    return 0
+""" 
+MAJOR PROBLEM WITH PRUNE MESSES UP GOOD COMBO """
+def prune(prevFreqs, potentialCombs, k):
+    # print(prevFreqs)
+    # print(potentialCombs)
+    finalList = []
+    for combo in potentialCombs:
+        # print(combo) <- this is a good combo
+        matches = 0
+        for subset in list(itertools.combinations(list(combo), k)):
+            print(subset)
+            for prev in prevFreqs:
+                if set(prev) == set(subset):
+                    matches += 1
+        if matches == k:
+            # print(combo) <- but this combo is messed up
+            finalList.append(list(combo)) 
+    # print("well")
+    # print(finalList)
+    return finalList
+
+def filterDuplicates(candidates):
+    updatedCandidates = []
+    for cand in candidates:
+        for item in cand:
+            # print(frozenset(item))
+            updatedCandidates.append(frozenset(item))
+    
+    # print(updatedCandidates)
+    return []
 
 def parseGoods(file):
     goodsDict = {}
