@@ -3,12 +3,15 @@ import csv
 import itertools
 
 def main():
-    basketsFile = "../bakery-datasets/1000/1000-out1.csv"
+    basketsFile = "../training/out1.csv"
     goodsFile = "../bakery-datasets/goods.csv"
     goods = parseGoods(goodsFile)
     baskets = parseBaskets(basketsFile)
-    minSup = 40
-    skyline = apriori(baskets, goods, minSup)
+    minSup = 100
+    minConf = .8
+    (skylineFrequentItemsets, supportDict) = apriori(baskets, goods, minSup)
+    confDict = genRules(skylineFrequentItemsets, supportDict, minConf)
+    outputToTerminal(skylineFrequentItemsets, supportDict, confDict)
 
 def apriori(basketsDict, goodsDict, minSup):
     zeros = np.zeros(50, dtype=int)
@@ -18,6 +21,7 @@ def apriori(basketsDict, goodsDict, minSup):
         for item in reciept:
             zeros[int(item)]+=1
     for i in range(50):
+        supportDict[i] = zeros[i]
         if(zeros[i] > minSup):
             if(len(frequentItemsets) == 0):
                 frequentItemsets.append([i])
@@ -37,14 +41,28 @@ def apriori(basketsDict, goodsDict, minSup):
                     zeros[i] += 1
         for i in range(len(zeros)):
             if zeros[i] >= minSup:
+                supportDict[frozenset(candidates[i])] = zeros[i]
                 if(type(frequentItemsets) != list):
                     frequentItemsets = frequentItemsets.tolist()
                 frequentItemsets.append(candidates[i])
-
-        k = k+1
         if(len(frequentItemsets[len(frequentItemsets) - 1]) < k-1):
             break
-    return 0
+        frequentItemsets = trimToSkyline(frequentItemsets, k)
+        k = k+1
+    return (frequentItemsets, supportDict)
+
+def genRules(itemsets, supportDict, minConf):
+    confDict = {}
+    finalDict = {}
+    for item in itemsets:
+        if(len(item) > 1):
+            itemsForRule = []
+            for single in item:
+                confDict[(single, frozenset(item))] = float(supportDict[frozenset(item)])/supportDict[single]
+    for key, value in confDict.items():
+        if(value >= minConf):
+            finalDict[key] = value
+    return finalDict
 
 def candidateGen(frequentItemsets, k):
     candidates = set()
@@ -69,47 +87,65 @@ def candidateGen(frequentItemsets, k):
         for item in frequentItemsets:
             if(len(item) == k):
                 prevFreqItemsets.append(item)
+        approvedCandidates = []
         for i in range(len(prevFreqItemsets)):
             for j in range(len(prevFreqItemsets)):
                 if(i+1 != len(prevFreqItemsets)):
-                    if(i != j):
+                    if(i != j): # check there are no duplicates in here
                         nextLevel = list(itertools.combinations(np.append(prevFreqItemsets[i], prevFreqItemsets[j]), k+1))
-                        # print(nextLevel)
                         valid = prune(prevFreqItemsets, nextLevel, k)
                         if len(valid) > 0:
-                            candidatesArr.append(valid)
-        return filterDuplicates(candidatesArr)
+                            approvedCandidates.append(valid)
+        return filterDuplicates(approvedCandidates)
 
-""" 
-MAJOR PROBLEM WITH PRUNE MESSES UP GOOD COMBO """
+def trimToSkyline(items, k):
+    itemSetInQuestion = set()
+    itemSetPrevLevel = set()
+    toDelete = []
+    finalList = []
+    for item in items:
+        if(len(item) == k-1):
+            itemSetPrevLevel.add(frozenset(item))
+        elif(len(item) == k):
+            itemSetInQuestion.add(frozenset(item))
+    for item in itemSetInQuestion:
+        for prev in itemSetPrevLevel:
+            if(item.issuperset(prev)):
+                toDelete.append(list(prev))
+    for item in items:
+        flag = True
+        for itemToDelete in toDelete:
+            if(set(item) == set(itemToDelete)):
+                flag = False
+        if flag:
+            finalList.append(list(item))
+    return finalList
+
 def prune(prevFreqs, potentialCombs, k):
-    # print(prevFreqs)
-    # print(potentialCombs)
     finalList = []
     for combo in potentialCombs:
-        # print(combo) <- this is a good combo
+        if len(set(combo)) < k+1:
+            continue
         matches = 0
         for subset in list(itertools.combinations(list(combo), k)):
-            print(subset)
             for prev in prevFreqs:
                 if set(prev) == set(subset):
                     matches += 1
         if matches == k:
-            # print(combo) <- but this combo is messed up
             finalList.append(list(combo)) 
-    # print("well")
-    # print(finalList)
     return finalList
 
 def filterDuplicates(candidates):
     updatedCandidates = []
     for cand in candidates:
         for item in cand:
-            # print(frozenset(item))
             updatedCandidates.append(frozenset(item))
     
-    # print(updatedCandidates)
-    return []
+    updatedCandidates = list(set(updatedCandidates))
+    finalList = []
+    for cand in updatedCandidates:
+        finalList.append(list(cand))
+    return finalList
 
 def parseGoods(file):
     goodsDict = {}
@@ -133,6 +169,16 @@ def parseBaskets(file):
             basketsDict[int(line[0])] = np.array(basket)
         csvfile.close()
     return basketsDict
+
+def outputToTerminal(skylineFrequentItemsets, supportDict, confDict):
+    print("Skyline Frequent Itemsets: ")    
+    for itemset in skylineFrequentItemsets:
+        print("%s  |  support: %d" % (itemset, supportDict[frozenset(itemset)]))
+    print("\n\nAssociation Rules: ")
+    i=0
+    for (rightSide, leftSide), value in confDict.items():
+        i+=1
+        print("Rule %d: %s ----> %d  |  %f" % (i, list(leftSide), rightSide, value))
 
 if __name__ == "__main__":
     main()
