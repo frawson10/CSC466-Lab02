@@ -3,26 +3,26 @@ import csv
 import itertools
 
 def main():
-    basketsFile = "../training/out1.csv"
+    basketsFile = "../bakery-datasets/5000/5000-out1.csv"
     goodsFile = "../bakery-datasets/goods.csv"
     goods = parseGoods(goodsFile)
     baskets = parseBaskets(basketsFile)
-    minSup = 100
-    minConf = .8
+    minSup = .04
+    minConf = .3
     (skylineFrequentItemsets, supportDict) = apriori(baskets, goods, minSup)
     confDict = genRules(skylineFrequentItemsets, supportDict, minConf)
     outputToTerminal(skylineFrequentItemsets, supportDict, confDict)
 
 def apriori(basketsDict, goodsDict, minSup):
-    zeros = np.zeros(50, dtype=int)
+    zeros = np.zeros(len(goodsDict), dtype=int)
     frequentItemsets = []
     supportDict = {}
     for reciept in basketsDict.values():
         for item in reciept:
             zeros[int(item)]+=1
-    for i in range(50):
-        supportDict[i] = zeros[i]
-        if(zeros[i] > minSup):
+    for i in range(len(goodsDict)):
+        supportDict[i] = float(zeros[i]) / len(basketsDict)
+        if(float(zeros[i]) / len(basketsDict) > minSup):
             if(len(frequentItemsets) == 0):
                 frequentItemsets.append([i])
             else:
@@ -40,8 +40,8 @@ def apriori(basketsDict, goodsDict, minSup):
                 if exists:
                     zeros[i] += 1
         for i in range(len(zeros)):
-            if zeros[i] >= minSup:
-                supportDict[frozenset(candidates[i])] = zeros[i]
+            if (float(zeros[i]) / len(basketsDict)) >= minSup:
+                supportDict[frozenset(candidates[i])] = float(zeros[i]) / len(basketsDict)
                 if(type(frequentItemsets) != list):
                     frequentItemsets = frequentItemsets.tolist()
                 frequentItemsets.append(candidates[i])
@@ -173,7 +173,10 @@ def parseBaskets(file):
 def outputToTerminal(skylineFrequentItemsets, supportDict, confDict):
     print("Skyline Frequent Itemsets: ")    
     for itemset in skylineFrequentItemsets:
-        print("%s  |  support: %d" % (itemset, supportDict[frozenset(itemset)]))
+        if(len(itemset) == 1):
+            print("%s  |  support: %f" % (itemset, supportDict[itemset[0]]))
+        else:
+            print("%s  |  support: %f" % (itemset, supportDict[frozenset(itemset)]))
     print("\n\nAssociation Rules: ")
     i=0
     for (rightSide, leftSide), value in confDict.items():
